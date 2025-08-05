@@ -2,9 +2,8 @@ var REFRESH_INTERVAL_SECS = 5 * 60;
 // var REFRESH_INTERVAL_SECS = 20;
 
 const adjustCss = () => {
-    const container = document.getElementById("memory-filters");
-    const searchBar = document.getElementById("memory-search");
-    searchBar.style.width = `${0.4 * container.clientWidth}px`;
+    // CSS is now handled entirely by the stylesheet with responsive design
+    // No need for dynamic width adjustments
 };
 
 const autoRefresh = () => {
@@ -45,12 +44,21 @@ const syncOnBlur = async () => {
 (async () => {
     await initSyncAndState();
     makeMemoryHTML();
-    addListener("memory-search-clear-icon", "click", handleClearSearch);
-    addListener(document, "scroll", displayOnScroll(false));
-    // set default sort to lastOpenDate
+    
+    // Add event listeners for the new integrated controls
+    addListener("memory-search-clear", "click", handleClearSearch);
+    addListener("filter-favorites", "click", handleFilterFavorites);
+    addListener("memory-select", "change", handleMemorySelectChange);
+    addListener("memory-sort-toggle", "click", handleMemorySortArrow);
+    
+    // For fullMemory page, listen to window scroll since the page itself scrolls
+    addListener(window, "scroll", displayOnScroll(false));
+    
+    // Set default sort to lastOpenDate
     val("memory-select", "lastOpenDate");
-    // set default sort direction arrow down
+    // Set default sort direction arrow down  
     setMemorySortArrow("down");
+    
     adjustCss();
     autoRefresh();
     syncOnBlur();

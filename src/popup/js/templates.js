@@ -533,6 +533,120 @@ const getPopupPaperIconsHTML = (paper, currentUrl, is) => {
         >
             ${tablerSvg("math-function", "", ["popup-click-svg"])}
         </div>
+        
+        <div
+            tabindex="0"
+            class="memory-item-svg-div"
+            id="popup-memory-item-anki--${id}"
+            title="Add to Anki (Ctrl+K)"
+        >
+            ${tablerSvg("clipboard-list", "", ["popup-click-svg"])}
+        </div>
 
         ${download}`;
+};
+
+/**
+ * Return a formatted HTML string for a paper as a table row
+ * @param {object} paper A paper object
+ * @returns HTML string
+ */
+const getMemoryTableRowHTML = (paper) => {
+    const id = paper.id;
+    const displayId = getDisplayId(paper.id);
+    const note = paper.note || "";
+    const tags = new Set(paper.tags);
+    const favoriteClass = paper.favorite ? "active" : "";
+    
+    // Extract venue and year information
+    const venue = paper.venue || paper.journal || paper.booktitle || "";
+    const year = paper.year || "";
+    
+    // Truncate long text for display
+    const truncateText = (text, maxLength) => {
+        if (text.length <= maxLength) return text;
+        return text.substring(0, maxLength) + "...";
+    };
+    
+    const titleDisplay = truncateText(paper.title, 80);
+    const authorsDisplay = truncateText(cutAuthors(paper.author, 100), 50);
+    const venueDisplay = truncateText(venue, 20);
+    const noteDisplay = truncateText(note, 60);
+    
+    // Create tags HTML
+    const tagsHTML = [...tags]
+        .slice(0, 3) // Show max 3 tags inline
+        .map(tag => `<span class="tag-badge" data-tag="${tag}">${tag}</span>`)
+        .join("");
+    
+    const moreTags = tags.size > 3 ? `<span class="tag-badge">+${tags.size - 3}</span>` : "";
+    
+    return /*html*/ `
+        <tr class="paper-row" data-paper-id="${id}">
+            <td class="col-favorite">
+                <span class="favorite-star ${favoriteClass}" data-paper-id="${id}" title="Toggle favorite">
+                    &nbsp;
+                </span>
+            </td>
+            <td class="col-title">
+                <div class="paper-title" data-paper-id="${id}" title="${paper.title}">
+                    ${titleDisplay}
+                </div>
+            </td>
+            <td class="col-authors">
+                <div class="paper-authors" title="${cutAuthors(paper.author)}">
+                    ${authorsDisplay}
+                </div>
+            </td>
+            <td class="col-venue">
+                <div class="paper-venue" title="${venue}">
+                    ${venueDisplay}
+                </div>
+            </td>
+            <td class="col-year">
+                <div class="paper-year">
+                    ${year}
+                </div>
+            </td>
+            <td class="col-tags">
+                <div class="paper-tags" data-paper-id="${id}">
+                    <input type="text" class="editable-tags" 
+                           value="${[...tags].join(', ')}" 
+                           data-paper-id="${id}"
+                           data-original-value="${[...tags].join(', ')}"
+                           placeholder="Add tags..." 
+                           title="Click to edit tags">
+                </div>
+            </td>
+            <td class="col-note">
+                <div class="paper-note" data-paper-id="${id}">
+                    <textarea class="editable-note" 
+                              data-paper-id="${id}"
+                              data-original-value="${note}"
+                              placeholder="Add note..."
+                              rows="2"
+                              title="Click to edit note">${note}</textarea>
+                </div>
+            </td>
+            <td class="col-actions">
+                <div class="action-buttons">
+                    <button class="action-btn copy-md" 
+                            data-paper-id="${id}" 
+                            title="Copy Markdown link">
+                        MD
+                    </button>
+                    <button class="action-btn copy-bibtex" 
+                            data-paper-id="${id}" 
+                            title="Copy BibTeX citation">
+                        BIB
+                    </button>
+                    <button class="action-btn open-paper" 
+                            data-paper-id="${id}" 
+                            title="Open paper">
+                        OPEN
+                    </button>
+                </div>
+            </td>
+        </tr>
+    `;
 };
