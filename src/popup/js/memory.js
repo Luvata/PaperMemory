@@ -438,32 +438,55 @@ const saveFavoriteItem = (id, favorite) => {
  * @param {string} direction up/down string to change the arrow's direction
  */
 const setMemorySortArrow = (direction) => {
-    let arrow;
-    if (direction === "up") {
-        arrow = /*html*/ `<svg
-            viewBox="0 0 24 24"
-            class="memory-sort-arrow-svg"
-            id="memory-sort-arrow-up"
-        >
-            <path stroke="none" d="M0 0h24v24H0z" fill="none" />
-            <line x1="12" y1="5" x2="12" y2="19" />
-            <line x1="16" y1="9" x2="12" y2="5" />
-            <line x1="8" y1="9" x2="12" y2="5" />
-        </svg>`;
+    // Handle both old popup design and new fullMemory design
+    const arrowElement = document.getElementById("memory-sort-arrow") || 
+                        document.getElementById("memory-sort-toggle");
+    
+    if (!arrowElement) return;
+    
+    if (arrowElement.id === "memory-sort-toggle") {
+        // New fullMemory design - just update the button class and content
+        const sortArrow = arrowElement.querySelector(".sort-arrow");
+        if (sortArrow) {
+            // Clear existing classes
+            arrowElement.classList.remove("asc", "desc");
+            
+            if (direction === "up") {
+                arrowElement.classList.add("asc");
+                sortArrow.innerHTML = "↑";
+            } else {
+                arrowElement.classList.add("desc");
+                sortArrow.innerHTML = "↓";
+            }
+        }
     } else {
-        arrow = /*html*/ `<svg
-            class="memory-sort-arrow-svg"
-            id="memory-sort-arrow-down"
-            viewBox="0 0 24 24"
-        >
-            <path stroke="none" d="M0 0h24v24H0z" fill="none" />
-            <line x1="12" y1="5" x2="12" y2="19" />
-            <line x1="16" y1="15" x2="12" y2="19" />
-            <line x1="8" y1="15" x2="12" y2="19" />
-        </svg>`;
+        // Original popup design with SVG
+        let arrow;
+        if (direction === "up") {
+            arrow = /*html*/ `<svg
+                viewBox="0 0 24 24"
+                class="memory-sort-arrow-svg"
+                id="memory-sort-arrow-up"
+            >
+                <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+                <line x1="12" y1="5" x2="12" y2="19" />
+                <line x1="16" y1="9" x2="12" y2="5" />
+                <line x1="8" y1="9" x2="12" y2="5" />
+            </svg>`;
+        } else {
+            arrow = /*html*/ `<svg
+                class="memory-sort-arrow-svg"
+                id="memory-sort-arrow-down"
+                viewBox="0 0 24 24"
+            >
+                <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+                <line x1="12" y1="5" x2="12" y2="19" />
+                <line x1="16" y1="15" x2="12" y2="19" />
+                <line x1="8" y1="15" x2="12" y2="19" />
+            </svg>`;
+        }
+        setHTML("memory-sort-arrow", arrow);
     }
-
-    setHTML("memory-sort-arrow", arrow);
 };
 
 /**
@@ -652,7 +675,15 @@ const updatePaperTags = (id, elementId) => {
 
 const displayOnScroll = (isPopup) =>
     delay(() => {
-        const { bottom } = findEl({ element: "memory-table" }).getBoundingClientRect();
+        // For fullMemory page, use papers-table-body; for popup, use memory-table
+        const isFullMemoryPage = document.getElementById("papers-table-body") !== null;
+        const tableElement = isFullMemoryPage 
+            ? document.getElementById("papers-table-body")
+            : findEl({ element: "memory-table" });
+        
+        if (!tableElement) return;
+        
+        const { bottom } = tableElement.getBoundingClientRect();
         const height = isPopup
             ? findEl({ element: "memory-container" }).getBoundingClientRect().height
             : window.innerHeight;
@@ -663,7 +694,14 @@ const displayOnScroll = (isPopup) =>
             currentPapers < global.state.papersList.length
         ) {
             global.state.currentMemoryPagination += 1;
-            displayMemoryTable(global.state.currentMemoryPagination);
+            
+            // Use table view for fullMemory page, card view for popup
+            const isFullMemoryPage = document.getElementById("papers-table-body") !== null;
+            if (isFullMemoryPage) {
+                displayMemoryTableView(global.state.currentMemoryPagination);
+            } else {
+                displayMemoryTable(global.state.currentMemoryPagination);
+            }
         }
     }, 50);
 
@@ -768,6 +806,327 @@ const displayMemoryTable = (pagination = 0) => {
 };
 
 /**
+ * Display papers in a table format for the fullMemory page
+ * @param {number} pagination - pagination offset
+ */
+const displayMemoryTableView = (pagination = 0) => {
+    const start = Date.now();
+    
+    // Check if we're in fullMemory page (has papers-table-body element)
+    const tableBody = document.getElementById("papers-table-body");
+    if (!tableBody) {
+        // Fall back to original display for popup
+        return displayMemoryTable(pagination);
+    }
+
+    // Clear existing rows
+    if (pagination === 0) {
+        tableBody.innerHTML = "";
+        global.state.currentMemoryPagination = 0;
+    }
+
+    // Check if there are no papers to display
+    if (global.state.papersList.length === 0) {
+        if (pagination === 0) {
+            showTableEmptyState();
+        }
+        return;
+    }
+
+    // Add relevant sorted papers
+    let rows = [];
+    const papersToShow = global.state.papersList.slice(
+        pagination * global.state.memoryItemsPerPage,
+        (pagination + 1) * global.state.memoryItemsPerPage
+    );
+
+    for (const paper of papersToShow) {
+        try {
+            rows.push(getMemoryTableRowHTML(paper));
+        } catch (error) {
+            log("displayMemoryTableView error:");
+            log(error);
+            log(paper);
+        }
+    }
+
+    // Insert rows
+    if (pagination === 0) {
+        tableBody.innerHTML = rows.join("");
+    } else {
+        tableBody.insertAdjacentHTML("beforeend", rows.join(""));
+    }
+
+    // Add event listeners for table interactions
+    addTableEventListeners();
+
+    const end = Date.now();
+    info("Table display duration (s): " + (end - start) / 1e3);
+};
+
+/**
+ * Add event listeners for table interactions
+ */
+const addTableEventListeners = () => {
+    // Favorite star toggle
+    addEventToClass(".favorite-star", "click", handleToggleFavoriteTable);
+    
+    // Paper title click (open paper)
+    addEventToClass(".paper-title", "click", handleOpenPaperTable);
+    
+    // Tag click (search by tag)
+    addEventToClass(".tag-badge", "click", handleTagClickTable);
+    
+    // Copy buttons
+    addEventToClass(".copy-md", "click", handleCopyMarkdownTable);
+    addEventToClass(".copy-bibtex", "click", handleCopyBibtexTable);
+    addEventToClass(".open-paper", "click", handleOpenPaperTable);
+    
+    // Inline editing
+    addEventToClass(".editable-tags", "blur", handleTagsEditTable);
+    addEventToClass(".editable-tags", "keydown", handleTagsKeydownTable);
+    addEventToClass(".editable-note", "blur", handleNoteEditTable);
+    addEventToClass(".editable-note", "keydown", handleNoteKeydownTable);
+};
+
+/**
+ * Handle favorite star toggle in table
+ */
+const handleToggleFavoriteTable = async (event) => {
+    const paperId = event.target.dataset.paperId;
+    if (!paperId || !global.state.papers[paperId]) return;
+    
+    const paper = global.state.papers[paperId];
+    paper.favorite = !paper.favorite;
+    
+    // Update UI
+    event.target.classList.toggle("active", paper.favorite);
+    
+    // Save to storage
+    await setStorage("papers", global.state.papers);
+    await pushToRemote();
+};
+
+/**
+ * Handle paper title/open button click in table
+ */
+const handleOpenPaperTable = async (event) => {
+    const paperId = event.target.dataset.paperId;
+    if (!paperId || !global.state.papers[paperId]) return;
+    
+    const paper = global.state.papers[paperId];
+    const url = global.state.prefs.checkPreferPdf ? paperToPDF(paper) : paperToAbs(paper);
+    
+    // Update visit count and last open date
+    paper.count = (paper.count || 0) + 1;
+    paper.lastOpenDate = new Date().toISOString();
+    
+    await setStorage("papers", global.state.papers);
+    await pushToRemote();
+    
+    // Open in new tab
+    window.open(url, '_blank');
+};
+
+/**
+ * Handle tag click in table (search by tag)
+ */
+const handleTagClickTable = (event) => {
+    const tag = event.target.dataset.tag;
+    if (!tag) return;
+    
+    const searchInput = document.getElementById("memory-search");
+    if (searchInput) {
+        searchInput.value = `t:${tag}`;
+        searchInput.dispatchEvent(new Event('keypress'));
+    }
+};
+
+/**
+ * Handle copy markdown in table
+ */
+const handleCopyMarkdownTable = async (event) => {
+    const paperId = event.target.dataset.paperId;
+    if (!paperId || !global.state.papers[paperId]) return;
+    
+    const paper = global.state.papers[paperId];
+    const mdLink = makeMdLink(paper, global.state.prefs);
+    
+    try {
+        await navigator.clipboard.writeText(mdLink);
+        showTableFeedback(event.target, "Markdown copied!");
+    } catch (err) {
+        console.error("Failed to copy:", err);
+    }
+};
+
+/**
+ * Handle copy bibtex in table
+ */
+const handleCopyBibtexTable = async (event) => {
+    const paperId = event.target.dataset.paperId;
+    if (!paperId || !global.state.papers[paperId]) return;
+    
+    const paper = global.state.papers[paperId];
+    let bibtex = paper.bibtex;
+    
+    // Ensure URL and PDF fields are present
+    const bibtexObj = bibtexToObject(bibtex);
+    if (!bibtexObj.hasOwnProperty("url")) {
+        bibtexObj.url = paperToAbs(paper);
+    }
+    if (!bibtexObj.hasOwnProperty("pdf")) {
+        bibtexObj.pdf = paperToPDF(paper);
+    }
+    bibtex = bibtexToString(bibtexObj);
+    
+    try {
+        await navigator.clipboard.writeText(bibtex);
+        showTableFeedback(event.target, "BibTeX copied!");
+    } catch (err) {
+        console.error("Failed to copy:", err);
+    }
+};
+
+/**
+ * Handle tags editing in table
+ */
+const handleTagsEditTable = async (event) => {
+    const paperId = event.target.dataset.paperId;
+    const newValue = event.target.value.trim();
+    const originalValue = event.target.dataset.originalValue;
+    
+    if (!paperId || newValue === originalValue) return;
+    
+    const paper = global.state.papers[paperId];
+    if (!paper) return;
+    
+    // Parse tags from comma-separated string
+    const newTags = newValue ? newValue.split(',').map(tag => tag.trim()).filter(tag => tag) : [];
+    paper.tags = newTags;
+    
+    // Update original value
+    event.target.dataset.originalValue = newValue;
+    
+    // Save to storage
+    await setStorage("papers", global.state.papers);
+    await pushToRemote();
+    
+    showTableFeedback(event.target, "Tags updated!");
+};
+
+/**
+ * Handle tags keydown (save on Enter, cancel on Escape)
+ */
+const handleTagsKeydownTable = (event) => {
+    if (event.key === 'Enter') {
+        event.target.blur();
+    } else if (event.key === 'Escape') {
+        event.target.value = event.target.dataset.originalValue;
+        event.target.blur();
+    }
+};
+
+/**
+ * Handle note editing in table
+ */
+const handleNoteEditTable = async (event) => {
+    const paperId = event.target.dataset.paperId;
+    const newValue = event.target.value.trim();
+    const originalValue = event.target.dataset.originalValue;
+    
+    if (!paperId || newValue === originalValue) return;
+    
+    const paper = global.state.papers[paperId];
+    if (!paper) return;
+    
+    paper.note = newValue;
+    
+    // Update original value
+    event.target.dataset.originalValue = newValue;
+    
+    // Save to storage
+    await setStorage("papers", global.state.papers);
+    await pushToRemote();
+    
+    showTableFeedback(event.target, "Note updated!");
+};
+
+/**
+ * Handle note keydown (save on Ctrl+Enter, cancel on Escape)
+ */
+const handleNoteKeydownTable = (event) => {
+    if (event.key === 'Enter' && event.ctrlKey) {
+        event.target.blur();
+    } else if (event.key === 'Escape') {
+        event.target.value = event.target.dataset.originalValue;
+        event.target.blur();
+    }
+};
+
+/**
+ * Show temporary feedback message near an element
+ */
+const showTableFeedback = (element, message) => {
+    const feedback = document.createElement('div');
+    feedback.textContent = message;
+    feedback.style.cssText = `
+        position: absolute;
+        background: var(--success-color, #28a745);
+        color: white;
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-size: 0.8rem;
+        z-index: 1000;
+        pointer-events: none;
+    `;
+    
+    const rect = element.getBoundingClientRect();
+    feedback.style.left = rect.left + 'px';
+    feedback.style.top = (rect.top - 30) + 'px';
+    
+    document.body.appendChild(feedback);
+    
+    setTimeout(() => {
+        document.body.removeChild(feedback);
+    }, 2000);
+};
+
+/**
+ * Show empty state for the table when no papers are found
+ */
+const showTableEmptyState = () => {
+    const tableBody = document.getElementById("papers-table-body");
+    if (!tableBody) return;
+    
+    tableBody.innerHTML = `
+        <tr>
+            <td colspan="8" class="table-empty">
+                <h3>No papers found</h3>
+                <p>Try adjusting your search terms or filters.</p>
+            </td>
+        </tr>
+    `;
+};
+
+/**
+ * Show loading state for the table
+ */
+const showTableLoadingState = () => {
+    const tableBody = document.getElementById("papers-table-body");
+    if (!tableBody) return;
+    
+    tableBody.innerHTML = `
+        <tr>
+            <td colspan="8" class="table-loading">
+                <div class="pm-loader" style="width: 32px; height: 32px; margin: 0 auto 16px;"></div>
+                Loading papers...
+            </td>
+        </tr>
+    `;
+};
+
+/**
  * Main function called after the user clicks on the PaperMemory button
  * or presses `a`.
  * + closes the menu if it is open (should not be)
@@ -779,7 +1138,13 @@ const makeMemoryHTML = async () => {
         `Search ${global.state.papersList.length} entries ...`
     );
 
-    displayMemoryTable();
+    // Use table view for fullMemory page, card view for popup
+    const isFullMemoryPage = document.getElementById("papers-table-body") !== null;
+    if (isFullMemoryPage) {
+        displayMemoryTableView();
+    } else {
+        displayMemoryTable();
+    }
 
     // add input search delay if there are many papers:
     // wait for some time between keystrokes before firing the search

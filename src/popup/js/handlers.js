@@ -239,31 +239,79 @@ const handleMemorySelectChange = (e) => {
     const sort = e.target.value;
     global.state.sortKey = sort;
     sortMemory();
-    displayMemoryTable();
+    
+    // Use table view for fullMemory page, card view for popup
+    const isFullMemoryPage = document.getElementById("papers-table-body") !== null;
+    if (isFullMemoryPage) {
+        displayMemoryTableView();
+    } else {
+        displayMemoryTable();
+    }
+    
     setMemorySortArrow("down");
 };
 
 const handleMemorySortArrow = (e) => {
-    if (querySelector("#memory-sort-arrow svg").id === "memory-sort-arrow-down") {
-        setMemorySortArrow("up");
-    } else {
-        setMemorySortArrow("down");
+    // Handle both old popup design and new fullMemory design
+    const sortToggle = document.getElementById("memory-sort-toggle");
+    const sortArrowSvg = document.querySelector("#memory-sort-arrow svg");
+    
+    if (sortToggle) {
+        // New fullMemory design - check current state and toggle
+        const isCurrentlyDesc = sortToggle.classList.contains("desc");
+        const isCurrentlyAsc = sortToggle.classList.contains("asc");
+        
+        if (isCurrentlyDesc || (!isCurrentlyDesc && !isCurrentlyAsc)) {
+            setMemorySortArrow("up");
+        } else {
+            setMemorySortArrow("down");
+        }
+    } else if (sortArrowSvg) {
+        // Original popup design
+        if (sortArrowSvg.id === "memory-sort-arrow-down") {
+            setMemorySortArrow("up");
+        } else {
+            setMemorySortArrow("down");
+        }
     }
+    
     reverseMemory();
-    displayMemoryTable();
+    
+    // Use table view for fullMemory page, card view for popup
+    const isFullMemoryPage = document.getElementById("papers-table-body") !== null;
+    if (isFullMemoryPage) {
+        displayMemoryTableView();
+    } else {
+        displayMemoryTable();
+    }
 };
 
 const handleFilterFavorites = () => {
     const showFavorites = !global.state.showFavorites;
     global.state.showFavorites = showFavorites;
+    const filterBtn = findEl({ element: "filter-favorites" });
+    
     if (showFavorites) {
-        addClass(
-            findEl({ element: "filter-favorites" }).querySelector("svg"),
-            "favorite"
-        );
+        // Handle both old popup design (with svg) and new fullMemory design
+        const svgElement = filterBtn.querySelector("svg");
+        if (svgElement) {
+            addClass(svgElement, "favorite");
+        } else {
+            // New fullMemory design - add active class to button
+            addClass(filterBtn, "active");
+        }
+        
         sortMemory();
         global.state.papersList = global.state.papersList.filter((p) => p.favorite);
-        displayMemoryTable();
+        
+        // Use table view for fullMemory page, card view for popup
+        const isFullMemoryPage = document.getElementById("papers-table-body") !== null;
+        if (isFullMemoryPage) {
+            displayMemoryTableView();
+        } else {
+            displayMemoryTable();
+        }
+        
         setMemorySortArrow("down");
         findEl(
             "memory-select"
@@ -271,25 +319,42 @@ const handleFilterFavorites = () => {
         const n = global.state.papersList.length;
         setPlaceholder("memory-search", `Search ${n} entries...`);
     } else {
-        removeClass(
-            findEl({ element: "filter-favorites" }).querySelector("svg"),
-            "favorite"
-        );
+        // Handle both old popup design (with svg) and new fullMemory design
+        const svgElement = filterBtn.querySelector("svg");
+        if (svgElement) {
+            removeClass(svgElement, "favorite");
+        } else {
+            // New fullMemory design - remove active class from button
+            removeClass(filterBtn, "active");
+        }
 
         if (val("memory-select") === "favoriteDate") {
             val("memory-select", "lastOpenDate");
             global.state.sortKey = "lastOpenDate";
         }
-        querySelector(`#memory-select option[value="favoriteDate"]`).remove();
+        const favoriteOption = querySelector(`#memory-select option[value="favoriteDate"]`);
+        if (favoriteOption) {
+            favoriteOption.remove();
+        }
+        
+        // Reset to show all papers
+        global.state.papersList = global.state.sortedPapers;
         sortMemory();
         setMemorySortArrow("down");
 
-        if (val("memory-search").trim()) {
-            dispatch("memory-search", "keypress");
+        // Always redisplay the table/cards regardless of search state
+        const isFullMemoryPage = document.getElementById("papers-table-body") !== null;
+        if (isFullMemoryPage) {
+            displayMemoryTableView();
         } else {
-            global.state.papersList = global.state.sortedPapers;
             displayMemoryTable();
         }
+
+        // If there's a search query, reapply it to the full list
+        if (val("memory-search").trim()) {
+            dispatch("memory-search", "keypress");
+        }
+        
         const n = global.state.sortedPapers.length;
         setPlaceholder("memory-search", `Search ${n} entries...`);
     }
@@ -303,7 +368,12 @@ const handleMemorySearchKeyPress = (allowEmptySearch) => (e) => {
 
     if (!query) {
         setTimeout(() => {
-            style("memory-search-clear-icon", "visibility", "hidden");
+            // Try both element IDs for compatibility
+            const clearIcon = document.getElementById("memory-search-clear") || 
+                             document.getElementById("memory-search-clear-icon");
+            if (clearIcon) {
+                clearIcon.style.visibility = "hidden";
+            }
         }, 0);
     }
 
@@ -311,14 +381,26 @@ const handleMemorySearchKeyPress = (allowEmptySearch) => (e) => {
         if (global.state.papersList.length !== global.state.sortedPapers.length) {
             // empty query but not all papers are displayed
             global.state.papersList = global.state.sortedPapers;
-            displayMemoryTable();
+            
+            // Use table view for fullMemory page, card view for popup
+            const isFullMemoryPage = document.getElementById("papers-table-body") !== null;
+            if (isFullMemoryPage) {
+                displayMemoryTableView();
+            } else {
+                displayMemoryTable();
+            }
             return;
         }
         if (!allowEmptySearch && e.key !== "Backspace") {
             return;
         }
     }
-    style("memory-search-clear-icon", "visibility", "visible");
+    // Try both element IDs for compatibility
+    const clearIcon = document.getElementById("memory-search-clear") || 
+                     document.getElementById("memory-search-clear-icon");
+    if (clearIcon) {
+        clearIcon.style.visibility = "visible";
+    }
     if (query.startsWith("t:")) {
         // look into tags
         searchMemoryByTags(query);
@@ -334,7 +416,14 @@ const handleMemorySearchKeyPress = (allowEmptySearch) => (e) => {
     }
     // display filtered papers
     toggleTagsCollapse(query.startsWith("t:"));
-    displayMemoryTable();
+    
+    // Use table view for fullMemory page, card view for popup
+    const isFullMemoryPage = document.getElementById("papers-table-body") !== null;
+    if (isFullMemoryPage) {
+        displayMemoryTableView();
+    } else {
+        displayMemoryTable();
+    }
 };
 
 const handleMemorySearchKeyUp = (e) => {
@@ -381,7 +470,12 @@ const handleTagClick = (e) => {
 const handleClearSearch = (e) => {
     val("memory-search", "");
     dispatch("memory-search", "clear-search");
-    style("memory-search-clear-icon", "visibility", "hidden");
+    // Try both element IDs for compatibility
+    const clearIcon = document.getElementById("memory-search-clear") || 
+                     document.getElementById("memory-search-clear-icon");
+    if (clearIcon) {
+        clearIcon.style.visibility = "hidden";
+    }
 };
 
 const handleMemorySwitchClick = () => {
