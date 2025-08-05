@@ -21,6 +21,8 @@ function popupJS() {
             "src/popup/js/handlers.js",
             "src/popup/js/templates.js",
             "src/popup/js/memory.js",
+            "src/popup/js/anki-connect.js",
+            "src/popup/js/anki-view.js",
             "src/popup/js/popup.js",
         ])
             .pipe(concat("popup.js"))

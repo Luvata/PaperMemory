@@ -3,6 +3,14 @@ html {
     max-width: 450px;
     min-height: 450px;
     font-size: 16px;
+    transition: all 0.3s ease;
+}
+
+/* Expand popup when Anki functionality is active */
+html.anki-active {
+    min-width: 1300px;
+    max-width: 1300px;
+    min-height: 700px;
 }
 
 body {
@@ -14,6 +22,13 @@ body {
     flex-direction: column;
     font-family: "Yantramanav";
     position: relative;
+    transition: all 0.3s ease;
+}
+
+/* Expand body when Anki functionality is active */
+body.anki-active {
+    max-width: 1300px;
+    min-width: 1300px;
 }
 
 .d-flex-center-center {
@@ -1050,5 +1065,546 @@ summary {
     font-size: 0.8rem;
     color: var(--red);
     margin-bottom: 12px;
+}
+
+/* Anki Integration Styles */
+.anki-side-panel {
+    position: fixed;
+    top: 0;
+    right: -100%;
+    width: 100%;
+    height: 100vh;
+    background: var(--bg);
+    border-left: 1px solid var(--border);
+    box-shadow: -2px 0 10px rgba(0, 0, 0, 0.1);
+    transition: right 0.3s ease;
+    z-index: 1000;
+    overflow-y: auto;
+}
+
+.anki-side-panel.open {
+    right: 0;
+}
+
+#popup-container.anki-open {
+    display: flex; /* Keep it visible but change layout */
+    width: 100%;
+}
+
+#popup-container.anki-open .anki-side-panel {
+    display: block;
+    position: relative;
+    right: 0;
+    width: 100%;
+    transform: none;
+}
+
+.anki-side-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-secondary);
+}
+
+.anki-side-header h2 {
+    margin: 0;
+    font-size: 1.2rem;
+    font-weight: 500;
+    color: var(--text);
+}
+
+.anki-close-btn {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    cursor: pointer;
+    color: var(--text);
+    padding: 0;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.anki-close-btn:hover {
+    background: var(--hover);
+    border-radius: 4px;
+}
+
+.anki-side-content {
+    padding: 20px;
+    height: calc(100vh - 60px);
+    overflow-y: auto;
+}
+
+.anki-paper-info {
+    margin-bottom: 24px;
+    padding: 16px;
+    background: var(--bg-secondary);
+    border-radius: 8px;
+    border: 1px solid var(--border);
+}
+
+.anki-paper-info h3 {
+    margin: 0 0 8px 0;
+    font-size: 1rem;
+    font-weight: 500;
+    color: var(--text);
+    line-height: 1.3;
+}
+
+.anki-paper-info p {
+    margin: 4px 0;
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+}
+
+.anki-short-metadata {
+    margin-top: 8px;
+}
+
+.anki-short-metadata small {
+    color: var(--text-secondary);
+    font-size: 0.8rem;
+}
+
+.anki-short-metadata a {
+    color: var(--link);
+    text-decoration: none;
+}
+
+.anki-short-metadata a:hover {
+    text-decoration: underline;
+}
+
+.anki-card-form {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.anki-field-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.anki-field-group label {
+    font-weight: 500;
+    color: var(--text);
+    font-size: 0.9rem;
+}
+
+.anki-question-container {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.anki-capture-area {
+    border: 2px dashed var(--border);
+    border-radius: 8px;
+    min-height: 120px;
+    position: relative;
+    background: var(--bg-secondary);
+}
+
+.anki-capture-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 120px;
     text-align: center;
+    color: var(--text-secondary);
+}
+
+.anki-capture-placeholder p {
+    margin: 0 0 12px 0;
+    font-size: 0.9rem;
+}
+
+#anki-capture-btn {
+    padding: 8px 16px;
+    background: var(--red);
+    color: white;
+    border: 1px solid var(--red);
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    transition: background-color 0.2s;
+}
+
+#anki-capture-btn:hover {
+    background: var(--lightRed);
+    border-color: var(--lightRed);
+}
+
+.anki-crop-container {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    min-height: 300px;
+}
+
+.anki-crop-instructions {
+    position: absolute;
+    top: 5px;
+    left: 5px;
+    right: 5px;
+    z-index: 10;
+    background: rgba(0, 0, 0, 0.85);
+    color: white;
+    padding: 8px;
+    border-radius: 4px;
+    text-align: center;
+    font-size: 0.75rem;
+    pointer-events: none;
+}
+
+.anki-crop-buttons {
+    margin-top: 6px;
+    display: flex;
+    gap: 6px;
+    justify-content: center;
+    pointer-events: auto;
+}
+
+.anki-crop-btn {
+    padding: 4px 8px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.8rem;
+    transition: background-color 0.2s;
+}
+
+.anki-crop-confirm {
+    background: #28a745;
+    color: white;
+}
+
+.anki-crop-full {
+    background: #6c757d;
+    color: white;
+}
+
+.anki-crop-cancel {
+    background: #dc3545;
+    color: white;
+}
+
+.anki-crop-btn:hover {
+    opacity: 0.9;
+}
+
+.anki-crop-canvas-container {
+    position: relative;
+    width: 100%;
+    height: auto; /* Let it grow to fit content */
+    overflow: visible; /* No need for scrolling */
+    margin-top: 35px;
+    border: 2px solid var(--border);
+    border-radius: 4px;
+    background: var(--bg-secondary);
+}
+
+.anki-crop-canvas {
+    cursor: crosshair;
+    display: block;
+    margin: 0 auto;
+    border: 1px solid var(--border);
+    background: #000;
+    /* Prevent CSS scaling that could cause distortion */
+    image-rendering: -webkit-optimize-contrast;
+    image-rendering: crisp-edges;
+}
+
+.anki-crop-overlay {
+    position: absolute;
+    border: 2px solid #007bff;
+    background: rgba(0, 123, 255, 0.2);
+    pointer-events: none;
+    display: none;
+    top: 0;
+    left: 0;
+    z-index: 10;
+}
+
+.anki-final-result {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px;
+    background: var(--bg-secondary);
+    border-radius: 8px;
+    border: 1px solid var(--border);
+}
+
+.anki-final-capture {
+    max-width: 100%;
+    height: auto;
+    border-radius: 4px;
+}
+
+.anki-image-info {
+    text-align: center;
+}
+
+.anki-image-info small {
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+}
+
+#anki-question,
+#anki-answer {
+    padding: 12px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--bg);
+    color: var(--text);
+    font-family: inherit;
+    font-size: 0.9rem;
+    resize: vertical;
+    min-height: 40px;
+}
+
+#anki-tags {
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--bg);
+    color: var(--text);
+    font-family: inherit;
+    font-size: 0.9rem;
+}
+
+#anki-question:focus,
+#anki-answer:focus,
+#anki-tags:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 2px rgba(var(--primary-rgb), 0.2);
+}
+
+.anki-actions {
+    display: flex;
+    gap: 12px;
+    justify-content: flex-end;
+    margin-top: 8px;
+}
+
+.anki-secondary-btn,
+.anki-primary-btn {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    font-weight: 500;
+    transition: all 0.2s;
+}
+
+.anki-secondary-btn {
+    background: transparent;
+    color: var(--text-secondary);
+    border: 1px solid var(--border);
+}
+
+.anki-secondary-btn:hover {
+    background: var(--hover);
+    color: var(--text);
+}
+
+.anki-primary-btn {
+    background: var(--red);
+    color: white;
+    border: 1px solid var(--red);
+}
+
+.anki-primary-btn:hover {
+    background: var(--lightRed);
+    border-color: var(--lightRed);
+}
+
+.anki-primary-btn:disabled {
+    background: #cccccc;
+    border-color: #cccccc;
+    color: #666666;
+    cursor: not-allowed;
+}
+
+.anki-status-message {
+    padding: 12px;
+    border-radius: 6px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+    text-align: center;
+}
+
+.anki-status-info {
+    background: #d1ecf1;
+    color: #0c5460;
+    border: 1px solid #bee5eb;
+}
+
+.anki-status-success {
+    background: #d4edda;
+    color: #155724;
+    border: 1px solid #c3e6cb;
+}
+
+.anki-status-error {
+    background: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+}
+
+#anki-status-display {
+    position: fixed;
+    bottom: 70px;
+    right: 10px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 12px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    z-index: 1001;
+    max-width: 250px;
+    font-size: 0.75rem;
+}
+
+#anki-status-text {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+}
+
+/* Full-screen cropping interface styles */
+#anki-fullscreen-crop-overlay {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+#anki-fullscreen-crop-overlay canvas {
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    border-radius: 4px;
+}
+
+#anki-fullscreen-crop-overlay button {
+    transition: all 0.2s ease;
+    font-weight: 500;
+}
+
+#anki-fullscreen-crop-overlay button:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+#fullscreen-use-selection:hover {
+    background: #218838 !important;
+}
+
+#fullscreen-use-full:hover {
+    background: #5a6268 !important;
+}
+
+#fullscreen-crop-cancel:hover {
+    background: #c82333 !important;
+}
+
+/* Enhanced cropping interface styles */
+.anki-enhanced-crop-container {
+    position: relative;
+    width: 100%;
+    height: auto; /* Let it grow to fit content */
+    min-height: 400px; /* Reduced from 650px */
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    margin-top: 16px;
+}
+
+.anki-enhanced-crop-canvas-container {
+    position: relative;
+    width: 100%;
+    max-width: 1200px; /* Allow full width use */
+    height: auto; /* Let it grow to fit content */
+    overflow: visible; /* No need for scrolling */
+    margin: 16px auto 0; /* Center the container */
+    border: 2px solid var(--border);
+    border-radius: 4px;
+    background: var(--bg-secondary);
+}
+
+.anki-enhanced-crop-container .anki-crop-canvas {
+    display: block;
+    cursor: crosshair;
+    border: 1px solid var(--border);
+    background: #000;
+    /* Prevent CSS scaling that could cause distortion */
+    image-rendering: -webkit-optimize-contrast;
+    image-rendering: crisp-edges;
+}
+
+.anki-enhanced-crop-container .anki-crop-overlay {
+    position: absolute;
+    border: 2px solid #007bff;
+    background: rgba(0, 123, 255, 0.2);
+    pointer-events: none;
+    display: none;
+    top: 0;
+    left: 0;
+    z-index: 10;
+}
+
+.anki-enhanced-crop-container .anki-crop-instructions {
+    text-align: center;
+    margin-bottom: 12px;
+}
+
+.anki-enhanced-crop-container .anki-crop-buttons {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+    margin-top: 12px;
+}
+
+.anki-enhanced-crop-container .anki-crop-btn {
+    padding: 8px 16px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    font-weight: 500;
+    transition: all 0.2s ease;
+}
+
+.anki-enhanced-crop-container .anki-crop-confirm {
+    background: #28a745;
+    color: white;
+}
+
+.anki-enhanced-crop-container .anki-crop-confirm:hover {
+    background: #218838;
+}
+
+.anki-enhanced-crop-container .anki-crop-full {
+    background: #6c757d;
+    color: white;
+}
+
+.anki-enhanced-crop-container .anki-crop-full:hover {
+    background: #5a6268;
+}
+
+.anki-enhanced-crop-container .anki-crop-cancel {
+    background: #dc3545;
+    color: white;
+}
+
+.anki-enhanced-crop-container .anki-crop-cancel:hover {
+    background: #c82333;
 }

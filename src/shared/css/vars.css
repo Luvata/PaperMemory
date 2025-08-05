@@ -2,6 +2,8 @@
     --blue: #0276ff;
     --red: #b31b1b;
     --lightRed: #cc5050;
+    --success: #28a745;
+    --error: #dc3545;
     --round: 4px;
     --rounder: 6px;
     --outline: grey;
@@ -10,4 +12,17 @@
     --noteColor: rgb(45, 45, 45);
     --dimColor: rgb(65, 64, 64);
     --lighterBackground: rgb(236, 236, 236);
+    
+    /* Additional variables for Anki integration */
+    --bg: white;
+    --bg-secondary: #f8f9fa;
+    --border: #dee2e6;
+    --text: #212529;
+    --text-secondary: #6c757d;
+    --text-muted: #adb5bd;
+    --link: #0d6efd;
+    --hover: #e9ecef;
+    --primary: var(--red);
+    --primary-hover: var(--lightRed);
+    --primary-rgb: 179, 27, 27;
 }

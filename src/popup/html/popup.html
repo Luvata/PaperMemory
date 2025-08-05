@@ -51,6 +51,8 @@
         <script defer src="../js/handlers.js"></script>
         <script defer src="../js/templates.js"></script>
         <script defer src="../js/memory.js"></script>
+        <script defer src="../js/anki-connect.js"></script>
+        <script defer src="../js/anki-view.js"></script>
         <script defer src="../js/popup.js"></script>
         <!-- @else -->
         <script defer src="../../shared/min/utils.min.js"></script>
@@ -276,6 +278,22 @@
                 <span id="close-popup-modal">&times;</span>
                 <!--=include modals/*.html -->
             </div>
+        </div>
+
+        <!-- Anki Side Panel -->
+        <div id="anki-side-panel" class="anki-side-panel" style="display: none;">
+            <div class="anki-side-header">
+                <h2>Add to Anki</h2>
+                <button type="button" class="anki-close-btn" id="anki-side-close">&times;</button>
+            </div>
+            <div class="anki-side-content" id="anki-side-content">
+                <!-- Content will be populated by JavaScript -->
+            </div>
+        </div>
+
+        <!-- Anki Status Display -->
+        <div id="anki-status-display" style="display: none;">
+            <small id="anki-status-text"></small>
         </div>
     </body>
 </html>
