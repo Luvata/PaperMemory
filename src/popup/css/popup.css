@@ -1482,6 +1482,24 @@ summary {
     color: var(--text-secondary);
 }
 
+/* Anki Status Indicator */
+#anki-status-indicator {
+    position: absolute;
+    top: 16px;
+    right: 50px; /* Position to the left of the settings button */
+    z-index: 100;
+    cursor: pointer;
+    transition: opacity 0.2s ease;
+}
+
+#anki-status-indicator:hover {
+    opacity: 0.8;
+}
+
+#anki-status-indicator svg {
+    display: block;
+}
+
 /* Full-screen cropping interface styles */
 #anki-fullscreen-crop-overlay {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -1607,4 +1625,109 @@ summary {
 
 .anki-enhanced-crop-container .anki-crop-cancel:hover {
     background: #c82333;
+}
+
+/* Existing Cards Section */
+.anki-existing-cards {
+    margin-bottom: 20px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    background: var(--bg-secondary);
+}
+
+.anki-existing-cards h4 {
+    margin: 0 0 12px 0;
+    font-size: 1rem;
+    color: var(--text);
+    font-weight: 600;
+}
+
+.anki-cards-list {
+    max-height: 200px;
+    overflow-y: auto;
+    border-radius: 6px;
+}
+
+.anki-existing-card {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 12px;
+    margin-bottom: 8px;
+    font-size: 0.85rem;
+    transition: border-color 0.2s ease;
+}
+
+.anki-existing-card:hover {
+    border-color: var(--lightRed);
+}
+
+.anki-card-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 8px;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+}
+
+.anki-card-deck {
+    background: var(--red);
+    color: white;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-weight: 500;
+}
+
+.anki-card-model {
+    font-style: italic;
+}
+
+.anki-card-content {
+    margin-bottom: 8px;
+}
+
+.anki-card-question,
+.anki-card-answer {
+    margin-bottom: 6px;
+    line-height: 1.4;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+}
+
+.anki-card-question strong,
+.anki-card-answer strong {
+    color: var(--text);
+    display: inline-block;
+    min-width: 15px;
+}
+
+.anki-card-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 8px;
+}
+
+.anki-tag {
+    background: var(--hover);
+    color: var(--text-secondary);
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 0.7rem;
+    border: 1px solid var(--border);
+}
+
+.anki-no-cards {
+    text-align: center;
+    color: var(--text-secondary);
+    font-style: italic;
+    padding: 20px;
+}
+
+.anki-loading {
+    text-align: center;
+    color: var(--text-secondary);
+    padding: 20px;
+    font-style: italic;
 }

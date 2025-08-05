@@ -81,6 +81,9 @@ async function openAnkiView(paper) {
         // Setup event listeners
         setupAnkiEventListeners();
         
+        // Load existing cards for this paper
+        loadExistingCards(paper);
+        
         // Focus on question field
         setTimeout(() => {
             const questionField = document.getElementById('anki-question');
@@ -136,6 +139,14 @@ function createAnkiFormContent(paper) {
             <h3>${paper.title || 'Unknown Title'}</h3>
             <p><strong>Authors:</strong> ${paper.author || paper.authors || 'Unknown'}</p>
             <div class="anki-short-metadata">${shortMetadata}</div>
+        </div>
+        
+        <!-- Existing Cards Section -->
+        <div class="anki-existing-cards" id="anki-existing-cards" style="display: none;">
+            <h4>📚 Existing Cards for this Paper</h4>
+            <div class="anki-cards-list" id="anki-cards-list">
+                <div class="anki-loading">Loading existing cards...</div>
+            </div>
         </div>
         
         <div class="anki-card-form">
@@ -899,8 +910,13 @@ async function handleAddToAnki() {
         const tagList = tags ? tags.split(',').map(t => t.trim()).filter(t => t) : [];
         tagList.push('arxiv', 'papermemory'); // Add default tags
         
-        // Add card to Anki
-        await addAnkiCard('arxiv', frontContent, answer, tagList);
+        // Add paper metadata to tags for easier searching
+        if (paper.source === 'arxiv' && paper.id) {
+            tagList.push(`arxiv:${paper.id}`);
+        }
+        
+        // Add card to Anki with paper metadata
+        await addAnkiCard('arxiv', frontContent, answer, tagList, paper);
         
         showAnkiStatus('Card added to Anki successfully!', 'success');
         
@@ -963,4 +979,164 @@ function getCurrentPaper() {
     }
     
     return null;
+}
+
+/**
+ * Load and display existing cards for the current paper
+ * @param {object} paper - Paper object
+ */
+async function loadExistingCards(paper) {
+    const existingCardsSection = document.getElementById('anki-existing-cards');
+    const cardsList = document.getElementById('anki-cards-list');
+    
+    if (!existingCardsSection || !cardsList) return;
+    
+    try {
+        // Create search keys from paper data
+        const searchKeys = [];
+        
+        if (paper.source === 'arxiv' && paper.id) {
+            searchKeys.push(paper.id); // arxiv ID like "2401.12345"
+            searchKeys.push(`arxiv:${paper.id}`); // with prefix
+        }
+        
+        if (paper.title) {
+            // Use first few words of title
+            const titleWords = paper.title.split(' ').slice(0, 5).join(' ');
+            searchKeys.push(titleWords);
+        }
+        
+        let allCards = [];
+        
+        // Query for each search key
+        for (const key of searchKeys) {
+            try {
+                const cards = await queryCardsForPaper(key);
+                allCards = [...allCards, ...cards];
+            } catch (error) {
+                console.log(`Failed to query cards for "${key}":`, error);
+            }
+        }
+        
+        // Remove duplicates by card ID
+        const uniqueCards = allCards.filter((card, index, self) => 
+            index === self.findIndex(c => c.cardId === card.cardId)
+        );
+        
+        if (uniqueCards.length > 0) {
+            existingCardsSection.style.display = 'block';
+            cardsList.innerHTML = renderExistingCards(uniqueCards);
+        } else {
+            existingCardsSection.style.display = 'none';
+        }
+        
+    } catch (error) {
+        console.error('Error loading existing cards:', error);
+        existingCardsSection.style.display = 'none';
+    }
+}
+
+/**
+ * Render existing cards HTML
+ * @param {Object[]} cards - Array of card objects
+ * @returns {string} HTML string
+ */
+function renderExistingCards(cards) {
+    if (cards.length === 0) {
+        return '<div class="anki-no-cards">No existing cards found for this paper.</div>';
+    }
+    
+    return cards.map(card => {
+        // Extract text content from HTML question/answer
+        let questionText = stripHtml(card.question);
+        let answerText = stripHtml(card.answer);
+        
+        // Limit length for preview
+        const maxLength = 100;
+        const questionPreview = questionText.length > maxLength 
+            ? questionText.substring(0, maxLength) + '...' 
+            : questionText;
+        const answerPreview = answerText.length > maxLength 
+            ? answerText.substring(0, maxLength) + '...' 
+            : answerText;
+        
+        // Use the processed text directly (already handles visual content)
+        const finalQuestionText = questionPreview || '❓ [No preview available]';
+        const finalAnswerText = answerPreview || '💭 [No preview available]';
+        
+        return `
+            <div class="anki-existing-card">
+                <div class="anki-card-header">
+                    <span class="anki-card-deck">${card.deckName}</span>
+                    <span class="anki-card-model">${card.modelName}</span>
+                </div>
+                <div class="anki-card-content">
+                    <div class="anki-card-question">
+                        <strong>Q:</strong> ${finalQuestionText}
+                    </div>
+                    <div class="anki-card-answer">
+                        <strong>A:</strong> ${finalAnswerText}
+                    </div>
+                </div>
+                ${card.tags.length > 0 ? `
+                    <div class="anki-card-tags">
+                        ${card.tags.map(tag => `<span class="anki-tag">${tag}</span>`).join('')}
+                    </div>
+                ` : ''}
+            </div>
+        `;
+    }).join('');
+}
+
+/**
+ * Strip HTML tags and extract meaningful content from text
+ * @param {string} html - HTML string
+ * @returns {string} Clean plain text
+ */
+function stripHtml(html) {
+    if (!html) return '';
+    
+    const temp = document.createElement('div');
+    temp.innerHTML = html;
+    
+    // Check if there are images
+    const images = temp.querySelectorAll('img');
+    const hasImages = images.length > 0;
+    
+    // Get text content
+    let text = temp.textContent || temp.innerText || '';
+    
+    // Remove CSS rules (anything between { and })
+    text = text.replace(/\{[^}]*\}/g, '');
+    
+    // Remove common CSS properties and selectors
+    text = text.replace(/\.([\w-]+)\s*\{[^}]*\}/g, ''); // CSS rules
+    text = text.replace(/(font-family|font-size|text-align|color|background|margin|padding|border|width|height)[\s:][^;]*;?/gi, '');
+    text = text.replace(/rgb\([^)]*\)/gi, ''); // RGB colors
+    text = text.replace(/#[0-9a-f]{3,6}/gi, ''); // Hex colors
+    text = text.replace(/\d+px/gi, ''); // Pixel values
+    
+    // Remove extra whitespace and newlines
+    text = text.replace(/\s+/g, ' ').trim();
+    
+    // If we have images and little/no text, describe the visual content
+    if (hasImages && text.length < 20) {
+        const imageAlts = Array.from(images).map(img => img.alt).filter(alt => alt && alt.length > 0);
+        if (imageAlts.length > 0) {
+            return `📷 ${imageAlts[0]}`;
+        } else {
+            return `📷 [Image content]`;
+        }
+    }
+    
+    // If the result is still mostly CSS or very short, indicate visual content
+    if (text.length < 5 || text.match(/^[\s\w-]*[:{};]/)) {
+        if (hasImages) {
+            return '📷 [Visual card with image]';
+        } else {
+            return '🎨 [Formatted content]';
+        }
+    }
+    
+    return text;
 }

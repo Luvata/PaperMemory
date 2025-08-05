@@ -601,28 +601,39 @@ const popupMain = async (url, is, manualTrigger = false, tab = null) => {
 async function initAnkiStatus() {
     try {
         const status = await getAnkiStatus();
+        const statusIndicator = document.getElementById('anki-status-indicator');
         const statusDisplay = document.getElementById('anki-status-display');
         const statusText = document.getElementById('anki-status-text');
         
-        if (!statusDisplay || !statusText) return;
+        if (!statusIndicator) return;
         
         if (status.available) {
-            statusText.textContent = `Anki: Connected (v${status.version}, ${status.deckCount} decks${status.hasArxivDeck ? ', arxiv ✓' : ''})`;
-            statusText.style.color = 'var(--success)';
+            // Show compact green tick indicator
+            statusIndicator.style.display = 'block';
+            statusIndicator.title = `Anki: Connected (v${status.version}, ${status.deckCount} decks${status.hasArxivDeck ? ', arxiv ✓' : ''})`;
+            
+            // Hide the verbose status display
+            if (statusDisplay) statusDisplay.style.display = 'none';
         } else {
-            statusText.textContent = `Anki: Disconnected (${status.error || 'AnkiConnect not running'})`;
-            statusText.style.color = 'var(--error)';
+            // Hide indicator when disconnected, optionally show error in status display
+            statusIndicator.style.display = 'none';
+            
+            if (statusDisplay && statusText) {
+                statusText.textContent = `Anki: Disconnected (${status.error || 'AnkiConnect not running'})`;
+                statusText.style.color = 'var(--error)';
+                statusDisplay.style.display = 'block';
+                
+                // Auto-hide error message after 5 seconds
+                setTimeout(() => {
+                    statusDisplay.style.display = 'none';
+                }, 5000);
+            }
         }
-        
-        statusDisplay.style.display = 'block';
-        
-        // Auto-hide after 5 seconds
-        setTimeout(() => {
-            statusDisplay.style.display = 'none';
-        }, 5000);
         
     } catch (error) {
         console.error('Failed to initialize Anki status:', error);
+        const statusIndicator = document.getElementById('anki-status-indicator');
+        if (statusIndicator) statusIndicator.style.display = 'none';
     }
 }
 
