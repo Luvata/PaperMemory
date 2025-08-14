@@ -109,21 +109,7 @@ const setStandardPopupClicks = () => {
         });
     });
 
-    addListener("whats-new-container", "click", () => {
-        chrome.storage.local.get("whatsnew", ({ whatsnew }) => {
-            const version = chrome.runtime.getManifest().version;
-            if (typeof whatsnew === "undefined") {
-                whatsnew = {};
-            }
-            if (!whatsnew.hasOwnProperty(version)) {
-                hideId("whats-new-marker");
-            }
-            chrome.storage.local.set({
-                whatsnew: { ...whatsnew, [version]: true },
-            });
-            showPopupModal("whatsnew");
-        });
-    });
+    // Removed changelog (What's New) click handler
     addListener("keyboardShortcuts", "click", () => {
         // button on the home page when not on a known source
         showPopupModal("keyboard");
@@ -258,13 +244,7 @@ const popupMain = async (url, is, manualTrigger = false, tab = null) => {
     }
 
     addListener(document, "keydown", handlePopupKeydown);
-
-    chrome.storage.local.get("whatsnew", ({ whatsnew }) => {
-        const version = chrome.runtime.getManifest().version;
-        if (!whatsnew || !whatsnew.hasOwnProperty(version)) {
-            showId("whats-new-marker");
-        }
-    });
+    // Do not show or track the What's New marker anymore
 
     console.log("manualTrigger: ", manualTrigger);
     if (manualTrigger) {
@@ -307,6 +287,39 @@ const popupMain = async (url, is, manualTrigger = false, tab = null) => {
         setDefaultKeyboardAction(e.target.value);
     });
     fillUserGuideShortcuts();
+
+    // If background requested immediate Anki capture on open, trigger it
+    try {
+        chrome.storage.local.get('ankiCaptureAfterOpen', ({ ankiCaptureAfterOpen }) => {
+            if (ankiCaptureAfterOpen) {
+                // Reset flag first
+                chrome.storage.local.set({ ankiCaptureAfterOpen: false });
+                // Ensure side panel is open with current paper
+                const currentId = global.state.currentId;
+                const paper = currentId ? global.state.papers[currentId] : null;
+                if (paper) {
+                    window.currentPaper = paper;
+                }
+                // Open Anki view if not already
+                if (typeof toggleAnkiView === 'function') {
+                    // Ensure the panel is open, then start capture
+                    const alreadyOpen = document.body.classList.contains('anki-active');
+                    if (!alreadyOpen) {
+                        toggleAnkiView();
+                        setTimeout(() => {
+                            const btn = document.getElementById('anki-capture-btn');
+                            if (btn) btn.click(); else if (typeof startScreenCapture === 'function') startScreenCapture();
+                        }, 350);
+                    } else {
+                        const btn = document.getElementById('anki-capture-btn');
+                        if (btn) btn.click(); else if (typeof startScreenCapture === 'function') startScreenCapture();
+                    }
+                }
+            }
+        });
+    } catch (e) {
+        console.warn('Anki capture auto-open failed:', e);
+    }
 
     // Set PDF title function
     // setAndHandleCustomPDFFunction(menu);

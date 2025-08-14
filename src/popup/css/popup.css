@@ -8,9 +8,8 @@ html {
 
 /* Expand popup when Anki functionality is active */
 html.anki-active {
-    min-width: 1300px;
-    max-width: 1300px;
-    min-height: 700px;
+    min-width: 1500px;
+    min-height: 1000px;
 }
 
 body {
@@ -27,8 +26,7 @@ body {
 
 /* Expand body when Anki functionality is active */
 body.anki-active {
-    max-width: 1300px;
-    min-width: 1300px;
+    min-width: 1430px;
 }
 
 .d-flex-center-center {

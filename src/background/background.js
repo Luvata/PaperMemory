@@ -75,6 +75,35 @@ const initGist = async () => {
 
 initGist();
 
+// Build short metadata exactly like the Anki panel (title 3 words • year • venue • Link)
+function buildShortMetadata(paper) {
+    try {
+        if (!paper) return '';
+        const parts = [];
+        // Short title: part before colon, first 3 words
+        let title = paper.title || '';
+        if (title.includes(':')) title = title.split(':')[0].trim();
+        if (title) {
+            const shortTitle = title.split(/\s+/).slice(0, 3).join(' ');
+            if (shortTitle) parts.push(`<strong>${shortTitle}</strong>`);
+        }
+        if (paper.year) parts.push(paper.year);
+        if (paper.venue) parts.push(paper.venue);
+        let url = '';
+        if (paper.source === 'arxiv' && paper.id) {
+            try {
+                const arxivId = arxivIdFromPaperID ? arxivIdFromPaperID(paper.id) : (paper.id + '').split('-').slice(1).join('-').replace('_','/');
+                if (arxivId) url = `https://arxiv.org/abs/${arxivId}`;
+            } catch (_) {}
+        }
+        if (!url && paper.url) url = paper.url;
+        if (url) parts.push(`<a href="${url}" target="_blank">Link</a>`);
+        return parts.length ? `<small>${parts.join(' • ')}</small>` : '';
+    } catch (e) {
+        return '';
+    }
+}
+
 const setFaviconCode = `
 var link;
 if (window.location.href.startsWith("file://")){
@@ -377,6 +406,120 @@ chrome.runtime.onMessage.addListener((payload, sender, sendResponse) => {
         tryDBLP(payload.paper, false).then(sendResponse);
     } else if (payload.type === "try-unpaywall") {
         tryUnpaywall(payload.paper, false).then(sendResponse);
+  } else if (payload.type === "openPopupAndCapture") {
+      // Flag for the popup to auto-start Anki capture on open
+      chrome.storage.local.set({ ankiCaptureAfterOpen: true }, () => {
+          if (chrome.action && chrome.action.openPopup) {
+              try {
+                  chrome.action.openPopup(() => sendResponse(true));
+              } catch (e) {
+                  // Fallback: open popup page in a new tab
+                  chrome.tabs.create({
+                      url: chrome.runtime.getURL("src/popup/min/popup.min.html"),
+                  }, () => sendResponse(true));
+              }
+          } else {
+              // Fallback: open popup page in a new tab
+              chrome.tabs.create({
+                  url: chrome.runtime.getURL("src/popup/min/popup.min.html"),
+              }, () => sendResponse(true));
+          }
+      });
+  } else if (payload.type === "captureTab") {
+      try {
+          chrome.tabs.captureVisibleTab(null, { format: 'png' }, (dataUrl) => {
+              if (chrome.runtime.lastError) {
+                  console.error('captureVisibleTab error:', chrome.runtime.lastError.message);
+                  sendResponse({ ok: false, error: chrome.runtime.lastError.message });
+              } else {
+                  sendResponse({ ok: true, dataUrl });
+              }
+          });
+      } catch (e) {
+          console.error('captureTab exception:', e);
+          sendResponse({ ok: false, error: e.message });
+      }
+    } else if (payload.type === "startFullscreenCrop") {
+        // Relay a message to the active tab to start a fullscreen crop overlay
+        chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
+            if (tabs && tabs[0] && tabs[0].id) {
+                chrome.tabs.sendMessage(tabs[0].id, { message: "startFullscreenCrop" }, () => {
+                    // ignore response
+                });
+            }
+            sendResponse(true);
+        });
+    } else if (payload.type === "anki-add-from-crop") {
+        // Add note with short metadata identical to panel flow
+        (async () => {
+            try {
+                const ANKI_CONNECT_URL = 'http://localhost:8765';
+                // 1) Resolve paper metadata from payload or current tab/state
+                let resolvedPaper = payload.paper;
+                let activeTab;
+                if (!resolvedPaper || !resolvedPaper.title) {
+                    try {
+                        await initState();
+                        const tabs = await new Promise((resolve) => chrome.tabs.query({ active: true, currentWindow: true }, resolve));
+                        activeTab = tabs && tabs[0];
+                        const id = await parseIdFromUrl(activeTab?.url || "");
+                        if (id && global.state?.papers?.[id]) {
+                            resolvedPaper = global.state.papers[id];
+                        }
+                    } catch (_) {}
+                }
+
+                // 2) Build short metadata like Opt+Shift+C (panel)
+                let meta = buildShortMetadata(resolvedPaper);
+                // Fallback: derive from tab title/url if still empty
+                if (!meta && activeTab) {
+                    try {
+                        let title = activeTab.title || "";
+                        if (title.includes(":")) title = title.split(":")[0].trim();
+                        const shortTitle = title.split(/\s+/).slice(0, 3).join(" ");
+                        const link = activeTab.url ? `<a href="${activeTab.url}" target="_blank">Link</a>` : "";
+                        const parts = [];
+                        if (shortTitle) parts.push(`<strong>${shortTitle}</strong>`);
+                        if (link) parts.push(link);
+                        meta = parts.length ? `<small>${parts.join(' • ')}</small>` : '';
+                    } catch (_) {}
+                }
+                const metaHtml = meta ? meta + '<br><br>' : '';
+
+                // 3) Build tags similar to panel
+                const tags = ['arxiv', 'papermemory'];
+                if (resolvedPaper && resolvedPaper.source === 'arxiv' && resolvedPaper.id) {
+                    tags.push(`arxiv:${resolvedPaper.id}`);
+                }
+
+                // 4) Send addNote to AnkiConnect
+                const body = JSON.stringify({
+                    action: 'addNote',
+                    version: 6,
+                    params: {
+                        note: {
+                            deckName: 'arxiv',
+                            modelName: 'Basic',
+                            fields: {
+                                Front: `${metaHtml}<img src="${payload.dataUrl}">`,
+                                Back: ''
+                            },
+                            tags,
+                            options: { allowDuplicate: true, duplicateScope: 'deck' }
+                        }
+                    }
+                });
+                const resp = await fetch(ANKI_CONNECT_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body });
+                const data = await resp.json();
+                if (data && !data.error) {
+                    sendResponse({ ok: true, noteId: data.result });
+                } else {
+                    sendResponse({ ok: false, error: data && data.error });
+                }
+            } catch (e) {
+                sendResponse({ ok: false, error: e.message });
+            }
+        })();
     }
     return true;
 });
@@ -432,24 +575,42 @@ chrome.commands.onCommand.addListener((command) => {
         chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
             chrome.tabs.sendMessage(tabs[0].id, { message: "manualParsing" });
         });
-    } else if (command === "downloadPdf") {
-        chrome.tabs.query({ active: true, currentWindow: true }, async function (tabs) {
-            const url = tabs[0].url;
-            await initState();
-            const id = await parseIdFromUrl(url);
-            if (id) {
-                const paper = global.state.papers[id];
-                if (paper) {
-                    downloadPaperPdf(paper);
-                } else {
-                    warn("Unknown paper id:", id);
-                }
-            }
-        });
-    } else if (command === "defaultAction") {
+  } else if (command === "defaultAction") {
         chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
             chrome.tabs.sendMessage(tabs[0].id, { message: "defaultAction" });
         });
+    } else if (command === "ankiCapture") {
+      // Tell the content script to open the popup and jump into Anki capture
+      chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
+          chrome.tabs.sendMessage(tabs[0].id, { message: "ankiCapture" });
+      });
+  } else if (command === "downloadPdf") {
+      chrome.tabs.query({ active: true, currentWindow: true }, async function (tabs) {
+          const url = tabs[0].url;
+          await initState();
+          const id = await parseIdFromUrl(url);
+          if (id) {
+              const paper = global.state.papers[id];
+              if (paper) {
+                  downloadPaperPdf(paper);
+              } else {
+                  warn("Unknown paper id:", id);
+              }
+          } else {
+              warn("Could not parse paper id from URL:", url);
+          }
+      });
+    } else if (command === "openFullMemory") {
+      chrome.tabs.create({
+          url: chrome.runtime.getURL("src/fullMemory/fullMemory.html"),
+      });
+    } else if (command === "ankiFullscreenCapture") {
+      // Trigger fullscreen crop overlay on the active tab
+      chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
+          if (tabs && tabs[0] && tabs[0].id) {
+              chrome.tabs.sendMessage(tabs[0].id, { message: "startFullscreenCrop" });
+          }
+      });
     }
 });
 

@@ -19,30 +19,32 @@
         "default_popup": "src/popup/min/popup.min.html"
     },
     "commands": {
-        "_execute_action": {
-            "suggested_key": {
-                "default": "Ctrl+Shift+E",
-                "linux": "Ctrl+Shift+M"
-            },
-            "description": "Open PaperMemory's Popup"
-        },
         "manualParsing": {
-            "suggested_key": {
-                "default": "Ctrl+Shift+P"
-            },
             "description": "Manually trigger the parsing of a paper; only available if you have disabled auto-parsing in the menu"
         },
         "downloadPdf": {
-            "suggested_key": {
-                "default": "Ctrl+Shift+S"
-            },
             "description": "Download the pdf file for the current paper into your PaperMemoryStore"
         },
         "defaultAction": {
-            "suggested_key": {
-                "default": "Alt+Shift+E"
-            },
             "description": "Execute PaperMemory's default action for the current paper (if available)"
+        },
+        "openFullMemory": {
+            "suggested_key": {
+                "default": "Alt+Shift+X"
+            },
+            "description": "Open the full-page Memory view"
+        },
+        "ankiCapture": {
+            "suggested_key": {
+                "default": "Alt+Shift+C"
+            },
+            "description": "Start Anki capture mode on the current page"
+        },
+        "ankiFullscreenCapture": {
+            "suggested_key": {
+                "default": "Alt+Shift+S"
+            },
+            "description": "Start fullscreen crop capture for Anki on the current page"
         }
     },
     "options_ui": {

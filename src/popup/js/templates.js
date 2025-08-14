@@ -540,7 +540,7 @@ const getPopupPaperIconsHTML = (paper, currentUrl, is) => {
             id="popup-memory-item-anki--${id}"
             title="Add to Anki (Ctrl+K)"
         >
-            ${tablerSvg("clipboard-list", "", ["popup-click-svg"])}
+            ${tablerSvg("database-export", "", ["popup-click-svg"])}
         </div>
 
         ${download}`;

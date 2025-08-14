@@ -153,13 +153,14 @@ function createAnkiFormContent(paper) {
             <div class="anki-field-group">
                 <label for="anki-question">Question/Front</label>
                 <div class="anki-question-container">
-                    <div class="anki-capture-area" id="anki-capture-area">
-                        <div class="anki-capture-placeholder" id="anki-capture-placeholder">
-                            <p>Add a screenshot to your Anki card</p>
-                            <button type="button" id="anki-capture-btn">Capture Screen</button>
-                        </div>
-                        <canvas id="anki-capture-canvas" style="display: none;"></canvas>
-                    </div>
+            <div class="anki-capture-area" id="anki-capture-area">
+                <div class="anki-capture-placeholder" id="anki-capture-placeholder">
+                    <p>Add a screenshot to your Anki card</p>
+                    <button type="button" id="anki-capture-btn" title="Shortcut: Option/Alt + Shift + C">📷 Capture (Option+Shift+C)</button>
+                    <button type="button" id="anki-capture-fullscreen-btn" title="Shortcut: Cmd/Ctrl + Shift + S or Option/Alt + Shift + S">🖼️ Fullscreen Capture (Cmd/Ctrl+Shift+S)</button>
+                </div>
+                <canvas id="anki-capture-canvas" style="display: none;"></canvas>
+            </div>
                     <textarea id="anki-question" placeholder="Enter your question here..." rows="3"></textarea>
                 </div>
             </div>
@@ -261,6 +262,10 @@ function setupAnkiEventListeners() {
     if (captureBtn) {
         captureBtn.addEventListener('click', startScreenCapture);
     }
+    const captureFullscreenBtn = document.getElementById('anki-capture-fullscreen-btn');
+    if (captureFullscreenBtn) {
+        captureFullscreenBtn.addEventListener('click', startFullscreenCropOverlay);
+    }
     
     // Add card button
     const addCardBtn = document.getElementById('anki-add-card-btn');
@@ -268,10 +273,31 @@ function setupAnkiEventListeners() {
         addCardBtn.addEventListener('click', handleAddToAnki);
     }
     
-    // ESC key to close
+    // Global hotkeys while Anki panel is open
     document.addEventListener('keydown', function(e) {
-        if (e.key === 'Escape' && ankiViewState.isOpen) {
-            closeAnkiView();
+        if (!ankiViewState.isOpen) return;
+        // Close panel
+        if (e.key === 'Escape') {
+            // If a cropping UI is open, let the cropping handler take precedence
+            const cropOpen = document.querySelector('.anki-enhanced-crop-container') || document.querySelector('.anki-crop-container');
+            if (!cropOpen) {
+                closeAnkiView();
+            }
+            return;
+        }
+        // Start capture: Option/Alt + Shift + C
+        if (e.altKey && e.shiftKey && e.key.toLowerCase() === 'c') {
+            e.preventDefault();
+            startScreenCapture();
+        }
+        // Start fullscreen overlay crop: Cmd/Ctrl + Shift + S or Option/Alt + Shift + S
+        if (
+            e.shiftKey &&
+            (e.metaKey || e.ctrlKey || e.altKey) &&
+            ((e.code && e.code === 'KeyS') || (typeof e.key === 'string' && e.key.toLowerCase() === 's'))
+        ) {
+            e.preventDefault();
+            startFullscreenCropOverlay();
         }
     });
 }
@@ -284,22 +310,22 @@ function setupAnkiEventListeners() {
  */
 async function startScreenCapture() {
     try {
-        // Capture the visible tab
-        chrome.tabs.captureVisibleTab(null, { format: 'png' }, (dataUrl) => {
-            if (chrome.runtime.lastError) {
-                throw new Error(chrome.runtime.lastError.message);
+        // Ask background to capture the visible tab (works in MV3)
+        chrome.runtime.sendMessage({ type: 'captureTab' }, (response) => {
+            if (!response || !response.ok) {
+                console.error('Screen capture failed:', response?.error);
+                showAnkiStatus('Screen capture failed: ' + (response?.error || 'unknown error'), 'error');
+                return;
             }
-            
+            const dataUrl = response.dataUrl;
             // Create image for cropping
             const img = new Image();
             img.onload = function() {
                 const canvas = document.createElement('canvas');
                 const ctx = canvas.getContext('2d');
-                
                 canvas.width = img.width;
                 canvas.height = img.height;
                 ctx.drawImage(img, 0, 0);
-                
                 // Show enhanced popup cropping interface instead of full-screen
                 showEnhancedCroppingInterface(canvas);
             };
@@ -311,6 +337,57 @@ async function startScreenCapture() {
         showAnkiStatus('Screen capture failed: ' + error.message, 'error');
     }
 }
+
+/**
+ * Start a fullscreen cropping overlay on the active tab (delegates to content script)
+ */
+function startFullscreenCropOverlay() {
+    try {
+        chrome.runtime.sendMessage({ type: 'startFullscreenCrop' });
+    } catch (_) {}
+}
+
+// Receive crop result from content script fullscreen overlay
+chrome.runtime.onMessage.addListener((message) => {
+    if (message && message.type === 'anki-crop-result' && message.dataUrl) {
+        try {
+            // Auto-add to Anki (no UI) — create front = short meta + image, empty back
+            const paper = ankiViewState.currentPaper || getCurrentPaper();
+            const shortMetadata = createShortPaperMetadata(paper);
+            let frontContent = '';
+            if (shortMetadata) frontContent += shortMetadata + '<br><br>';
+            frontContent += `<img src="${message.dataUrl}"><br>`;
+            const tagList = ['arxiv','papermemory'];
+            if (paper && paper.source === 'arxiv' && paper.id) tagList.push(`arxiv:${paper.id}`);
+            // Ask background to add note via AnkiConnect
+            chrome.runtime.sendMessage({ type: 'anki-add-from-crop', dataUrl: message.dataUrl, paper }, (resp) => {
+                if (!resp || !resp.ok) {
+                    // Fallback to showing in panel if add failed
+                    try {
+                        const img = new Image();
+                        img.onload = function() {
+                            const canvas = document.createElement('canvas');
+                            const ctx = canvas.getContext('2d');
+                            canvas.width = img.width;
+                            canvas.height = img.height;
+                            ctx.drawImage(img, 0, 0);
+                            const jpegDataUrl = canvas.toDataURL('image/jpeg', 0.8);
+                            ankiViewState.capturedImage = jpegDataUrl;
+                            showCapturedImageResult(jpegDataUrl, canvas);
+                        };
+                        img.src = message.dataUrl;
+                    } catch (_) {}
+                } else {
+                    showAnkiStatus('Card added to Anki from fullscreen capture!', 'success');
+                    // Optionally close quickly
+                    setTimeout(() => { try { closeAnkiView(); } catch (_) {} }, 1200);
+                }
+            });
+        } catch (e) {
+            showAnkiStatus('Failed to use fullscreen capture result', 'error');
+        }
+    }
+});
 
 /**
  * Show enhanced cropping interface with larger popup
@@ -335,9 +412,9 @@ function showEnhancedCroppingInterface(originalCanvas) {
             <h4 style="margin: 0 0 8px 0; color: var(--text);">Crop Screenshot for Anki Card</h4>
             <p style="margin: 0 0 12px 0; font-size: 0.9rem; color: var(--text-secondary);">Drag to select the area you want to include in your card</p>
             <div class="anki-crop-buttons">
-                <button class="anki-crop-btn anki-crop-confirm" id="anki-use-selection-enhanced">Use Selection</button>
-                <button class="anki-crop-btn anki-crop-full" id="anki-use-full-enhanced">Use Full Image</button>
-                <button class="anki-crop-btn anki-crop-cancel" id="anki-crop-cancel-enhanced">Cancel</button>
+                <button class="anki-crop-btn anki-crop-confirm" id="anki-use-selection-enhanced" title="Enter">✅ Use Selection (Enter)</button>
+                <button class="anki-crop-btn anki-crop-full" id="anki-use-full-enhanced" title="F">🖼️ Full Image (F)</button>
+                <button class="anki-crop-btn anki-crop-cancel" id="anki-crop-cancel-enhanced" title="Esc">✖ Cancel (Esc)</button>
             </div>
         </div>
         <div class="anki-enhanced-crop-canvas-container">
@@ -352,9 +429,13 @@ function showEnhancedCroppingInterface(originalCanvas) {
     const cropCanvas = document.getElementById('anki-enhanced-crop-canvas');
     const cropCtx = cropCanvas.getContext('2d');
     
-    // Use the full available area - up to 1200px wide, 600px tall
-    const maxWidth = 1200;
-    const maxHeight = 600;
+    // Fit to available space to avoid scrolling
+    const containerRect = captureArea.getBoundingClientRect();
+    // Use full popup width to minimize discrepancy and reduce rounding
+    const availableWidth = Math.max(900, Math.min(containerRect.width - 32, 1200));
+    const availableHeight = Math.max(500, Math.min(window.innerHeight - 180, 900));
+    const maxWidth = availableWidth;
+    const maxHeight = availableHeight;
     const scale = Math.min(maxWidth / originalCanvas.width, maxHeight / originalCanvas.height, 1);
     
     const displayWidth = originalCanvas.width * scale;
@@ -369,9 +450,9 @@ function showEnhancedCroppingInterface(originalCanvas) {
     // Draw the image maintaining aspect ratio
     cropCtx.drawImage(originalCanvas, 0, 0, displayWidth, displayHeight);
     
-    // Store the scale factor for coordinate mapping
-    cropCanvas.dataset.scaleX = (originalCanvas.width / displayWidth).toString();
-    cropCanvas.dataset.scaleY = (originalCanvas.height / displayHeight).toString();
+    // Store precise scale factors for coordinate mapping (avoid rounding)
+    cropCanvas.dataset.scaleX = String(originalCanvas.width / displayWidth);
+    cropCanvas.dataset.scaleY = String(originalCanvas.height / displayHeight);
     
     // Setup enhanced cropping interaction
     setupEnhancedCropping(cropCanvas, originalCanvas, sidePanel, null, null);
@@ -458,17 +539,47 @@ function setupEnhancedCropping(displayCanvas, originalCanvas, sidePanel, origina
         }
     });
     
-    // Button handlers - using setTimeout to ensure elements exist
+    // Button handlers and hotkeys - using setTimeout to ensure elements exist
     setTimeout(() => {
         const useSelectionBtn = document.getElementById('anki-use-selection-enhanced');
         const useFullBtn = document.getElementById('anki-use-full-enhanced');
         const cancelBtn = document.getElementById('anki-crop-cancel-enhanced');
+        
+        const cleanupHotkeys = () => {
+            document.removeEventListener('keydown', keyHandler);
+        };
+        const keyHandler = (evt) => {
+            if (!ankiViewState.isOpen) return;
+            if (evt.key === 'Enter') {
+                evt.preventDefault();
+                if (selection && selection.width > 10 && selection.height > 10) {
+                    cropAndSaveImageEnhanced(originalCanvas, displayCanvas, selection);
+                    cleanupHotkeys();
+                } else {
+                    showAnkiStatus('Please select an area first', 'error');
+                }
+            } else if (evt.key.toLowerCase() === 'f') {
+                evt.preventDefault();
+                cropAndSaveImageEnhanced(originalCanvas, displayCanvas, null);
+                cleanupHotkeys();
+            } else if (evt.key === 'Escape') {
+                evt.preventDefault();
+                const captureArea = document.getElementById('anki-capture-area');
+                const placeholder = document.getElementById('anki-capture-placeholder');
+                const cropContainer = document.querySelector('.anki-enhanced-crop-container');
+                if (cropContainer) cropContainer.remove();
+                if (placeholder) placeholder.style.display = 'block';
+                cleanupHotkeys();
+            }
+        };
+        document.addEventListener('keydown', keyHandler);
         
         if (useSelectionBtn) {
             useSelectionBtn.addEventListener('click', () => {
                 if (selection && selection.width > 10 && selection.height > 10) {
                     console.log('Using selection for enhanced crop:', selection);
                     cropAndSaveImageEnhanced(originalCanvas, displayCanvas, selection);
+                    cleanupHotkeys();
                 } else {
                     showAnkiStatus('Please select an area first', 'error');
                 }
@@ -478,6 +589,7 @@ function setupEnhancedCropping(displayCanvas, originalCanvas, sidePanel, origina
         if (useFullBtn) {
             useFullBtn.addEventListener('click', () => {
                 cropAndSaveImageEnhanced(originalCanvas, displayCanvas, null);
+                cleanupHotkeys();
             });
         }
         
@@ -490,6 +602,7 @@ function setupEnhancedCropping(displayCanvas, originalCanvas, sidePanel, origina
                 
                 if (cropContainer) cropContainer.remove();
                 if (placeholder) placeholder.style.display = 'block';
+                cleanupHotkeys();
             });
         }
     }, 100);

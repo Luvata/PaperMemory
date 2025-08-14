@@ -880,6 +880,219 @@ const tryArxivDisplay = async ({
             });
         } else if (request.message === "defaultAction") {
             handleDefaultAction();
+        } else if (request.message === "ankiCapture") {
+            // Open popup programmatically and enter capture mode
+            (async () => {
+                try {
+                    // Determine current paper and focus the popup
+                    const id = await parseIdFromUrl(window.location.href);
+                    if (id && global.state.papers[id]) {
+                        // Open the popup (browser action) and then send a follow-up message
+                        chrome.runtime.sendMessage({ type: "openPopupAndCapture" });
+                    } else {
+                        chrome.runtime.sendMessage({ type: "openPopupAndCapture" });
+                    }
+                } catch (e) {
+                    chrome.runtime.sendMessage({ type: "openPopupAndCapture" });
+                }
+            })();
+        } else if (request.message === "startFullscreenCrop") {
+            // Create a transient full-screen overlay for cropping directly on the page
+            try {
+                if (document.getElementById('anki-fullscreen-crop-overlay')) return;
+
+                const overlay = document.createElement('div');
+                overlay.id = 'anki-fullscreen-crop-overlay';
+                Object.assign(overlay.style, {
+                    position: 'fixed',
+                    inset: '0',
+                    zIndex: '2147483647',
+                    background: 'rgba(0,0,0,0.25)',
+                    cursor: 'crosshair',
+                    backdropFilter: 'blur(0px)'
+                });
+
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d', { willReadFrequently: true });
+                Object.assign(canvas.style, {
+                    position: 'absolute',
+                    top: '0',
+                    left: '0'
+                });
+                canvas.width = window.innerWidth;
+                canvas.height = window.innerHeight;
+                overlay.appendChild(canvas);
+
+                const rect = document.createElement('div');
+                Object.assign(rect.style, {
+                    position: 'absolute',
+                    border: '2px solid #007bff',
+                    background: 'rgba(0,123,255,0.2)',
+                    pointerEvents: 'none',
+                    display: 'none'
+                });
+                overlay.appendChild(rect);
+
+                document.body.appendChild(overlay);
+                overlay.focus();
+
+                let startX = 0, startY = 0, drawing = false, escapePressed = false;
+                let keyCheckInterval = null;
+                
+                const cleanup = () => {
+                    console.log('Cleaning up crop overlay');
+                    window.removeEventListener('keydown', onKey, true);
+                    if (keyCheckInterval) clearInterval(keyCheckInterval);
+                    if (overlay.parentNode) {
+                        overlay.parentNode.removeChild(overlay);
+                    }
+                };
+                
+                const onKey = (e) => {
+                    if (e.key === 'Escape') {
+                        escapePressed = true;
+                    }
+                };
+                window.addEventListener('keydown', onKey, true);
+
+                const getPos = (evt) => ({ x: evt.clientX, y: evt.clientY });
+
+                overlay.addEventListener('mousedown', (e) => {
+                    if (e.button !== 0) return;
+                    escapePressed = false;
+                    drawing = true;
+                    const p = getPos(e);
+                    startX = p.x;
+                    startY = p.y;
+                    Object.assign(rect.style, {
+                        display: 'block',
+                        left: startX + 'px',
+                        top: startY + 'px',
+                        width: '0px',
+                        height: '0px'
+                    });
+                    
+                    keyCheckInterval = setInterval(() => {
+                        if (escapePressed) {
+                            cleanup();
+                        }
+                    }, 100);
+
+                    e.preventDefault();
+                });
+
+                overlay.addEventListener('mousemove', (e) => {
+                    if (!drawing) return;
+                    const p = getPos(e);
+                    const left = Math.min(startX, p.x);
+                    const top = Math.min(startY, p.y);
+                    const width = Math.abs(p.x - startX);
+                    const height = Math.abs(p.y - startY);
+                    Object.assign(rect.style, {
+                        left: left + 'px',
+                        top: top + 'px',
+                        width: width + 'px',
+                        height: height + 'px'
+                    });
+                });
+
+                const finish = async () => {
+                    if (!drawing) return;
+                    drawing = false;
+                    if (keyCheckInterval) clearInterval(keyCheckInterval);
+                    
+                    const left = parseInt(rect.style.left || '0');
+                    const top = parseInt(rect.style.top || '0');
+                    const width = parseInt(rect.style.width || '0');
+                    const height = parseInt(rect.style.height || '0');
+
+                    if (width < 5 || height < 5) {
+                        cleanup();
+                        return;
+                    }
+
+                    try {
+                        overlay.style.display = 'none';
+                        chrome.runtime.sendMessage({ type: 'captureTab' }, (response) => {
+                            if (chrome.runtime.lastError || !response || !response.ok) {
+                                console.error('Capture failed:', chrome.runtime.lastError || 'No response');
+                                cleanup();
+                                return;
+                            }
+                            const img = new Image();
+                            img.onload = function() {
+                                const scaleX = img.width / window.innerWidth;
+                                const scaleY = img.height / window.innerHeight;
+                                const sx = Math.round(left * scaleX);
+                                const sy = Math.round(top * scaleY);
+                                const sw = Math.round(width * scaleX);
+                                const sh = Math.round(height * scaleY);
+
+                                canvas.width = sw;
+                                canvas.height = sh;
+                                ctx.drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
+                                const jpegDataUrl = canvas.toDataURL('image/jpeg', 0.85);
+
+                                let shortMeta = '';
+                                try {
+                                    const p = (typeof paper !== 'undefined' && paper) ? paper : null;
+                                    if (p) {
+                                        const parts = [];
+                                        if (p.title) parts.push(`<strong>${(p.title + '').split(/\s+/).slice(0, 3).join(' ')}</strong>`);
+                                        if (p.year) parts.push(p.year);
+                                        if (p.venue) parts.push(p.venue);
+                                        let url = '';
+                                        if (p.source === 'arxiv' && p.id) {
+                                            const arxivId = (p.id + '').split('-').slice(1).join('-').replace(/_/g, '/');
+                                            if (arxivId) url = `https://arxiv.org/abs/${arxivId}`;
+                                        }
+                                        if (!url && p.url) url = p.url;
+                                        if (url) parts.push(`<a href="${url}" target="_blank">Link</a>`);
+                                        if (parts.length) shortMeta = `<small>${parts.join(' • ')}</small>`;
+                                    }
+                                } catch (_) {}
+
+                                const currentPaper = (typeof paper !== 'undefined' && paper) ? paper : null;
+                                chrome.runtime.sendMessage({ type: 'anki-add-from-crop', dataUrl: jpegDataUrl, paper: currentPaper, shortMeta }, (resp) => {
+                                    try {
+                                        const toast = document.createElement('div');
+                                        toast.textContent = resp && resp.ok ? '✅ Added to Anki' : `❌ Failed to add to Anki${resp && resp.error ? ': ' + resp.error : ''}`;
+                                        Object.assign(toast.style, {
+                                            position: 'fixed',
+                                            top: '16px',
+                                            right: '16px',
+                                            zIndex: '2147483647',
+                                            background: 'rgba(0,0,0,0.8)',
+                                            color: 'white',
+                                            padding: '10px 14px',
+                                            borderRadius: '6px',
+                                            fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto, sans-serif',
+                                            fontSize: '13px',
+                                            boxShadow: '0 2px 10px rgba(0,0,0,0.3)'
+                                        });
+                                        document.body.appendChild(toast);
+                                        setTimeout(() => { if (toast.parentNode) toast.parentNode.removeChild(toast); }, 2200);
+                                    } catch (_) {}
+                                    cleanup();
+                                });
+                            };
+                            img.src = response.dataUrl;
+                        });
+                    } catch (err) {
+                        console.error('Finish crop failed:', err);
+                        cleanup();
+                    }
+                };
+
+                overlay.addEventListener('mouseup', finish);
+                overlay.addEventListener('contextmenu', (e) => {
+                    e.preventDefault();
+                    cleanup();
+                });
+
+            } catch (err) {
+                console.error('Fullscreen crop overlay failed:', err);
+            }
         }
     });
 
